@@ -52,6 +52,7 @@ target_include_directories( IMGUI
 #######################################################
 
 add_library(jacks OBJECT
+    myimgui.cpp
     imgui_elements.cpp
     timer.cpp
     #testjack.cpp
@@ -77,9 +78,9 @@ target_include_directories(jacks PRIVATE jackcpp/include)
 
 target_link_libraries(jacks IMGUI glfw GL jackcpp)
 
-#add_executable(imjack main.cpp jacks)
-add_executable(imjack main.cpp $<TARGET_OBJECTS:jacks>)
-target_link_libraries(imjack jackcpp)
+add_executable(imjack main.cpp)
+#add_executable(imjack main.cpp $<TARGET_OBJECTS:jacks>)
+target_link_libraries(imjack jacks jackcpp)
 set_property(TARGET imjack PROPERTY CXX_STANDARD 11)
 target_include_directories(imjack PRIVATE jackcpp/include)
 target_link_libraries(imjack IMGUI ${GLFW3_LIBRARY} ${OPENGL_LIBRARIES} jack)

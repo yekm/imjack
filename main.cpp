@@ -1,46 +1,11 @@
-#include <cstdint>
-#include <memory>
 #include <stdlib.h> // exit
 #include <unistd.h> // getopt
 #include <error.h>
 
-#define GL_GLEXT_PROTOTYPES 1
-#define GL3_PROTOTYPES 1
-
-
-#include "imgui.h"
+#include "myimgui.hpp"
 #include "imgui_elements.h"
 
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl3.h"
-#include <stdio.h>
-#define GL_SILENCE_DEPRECATION
-#if defined(IMGUI_IMPL_OPENGL_ES2)
-#include <GLES2/gl2.h>
-#endif
-#include <GLFW/glfw3.h> // Will drag system OpenGL headers
-
 #include "jackaudioio.hpp"
-
-static GLFWwindow* window;
-static int sw = 380, sh = 480;
-
-bool get_window_size() {
-	
-	int _w, _h;
-	glfwGetFramebufferSize(window, &_w, &_h);
-	bool resized = (_w != sw || _h != sh);
-	sw = _w; sh = _h;
-
-	return resized;
-}
-
-static void glfw_error_callback(int error, const char* description)
-{
-	fprintf(stderr, "Glfw Error %d: %s\n", error, description);
-}
-
-char info[1024*4];
 
 
 class TestJack: public JackCpp::AudioIO {
@@ -50,11 +15,24 @@ class TestJack: public JackCpp::AudioIO {
 		virtual int audioCallback(jack_nframes_t nframes, 
 				audioBufVector inBufs, audioBufVector outBufs) {
 			for(unsigned int j = 0; j < nframes; j++) {
-				int cur = curi*i0 + curj;
-				outBufs[0][j] = inBufs[cur*2][j];
-				outBufs[1][j] = inBufs[cur*2+1][j];
+				if (special != -1) {
+					int last = i0*j0*2;
+					outBufs[0][j] = inBufs[last+special+0][j];
+					outBufs[1][j] = inBufs[last+special+1][j];
+				}
+				else {
+					int cur = curi*i0 + curj;
+					outBufs[0][j] = inBufs[cur*2][j];
+					outBufs[1][j] = inBufs[cur*2+1][j];
+				}
 			}
 			return 0;
+		}
+		bool is_special(int s) {
+			return special == s;
+		}
+		void set_special(int s) {
+			special = s;
 		}
 		bool is_current_in(int i, int j) {
 			return curi == i && curj == j;
@@ -63,11 +41,11 @@ class TestJack: public JackCpp::AudioIO {
 			curi = i;
 			curj = j;
 		}
-		TestJack(int i, int j) :
+		TestJack(int i, int j) :i
 			JackCpp::AudioIO("imjack-test", 0, 0),
 			i0(i), j0(j)
 			{
-				reserveInPorts(i0*j0);
+				reserveInPorts(i0*j0*2+2);
 				reserveOutPorts(2);
 
 				addOutPort("out-1");
@@ -81,8 +59,12 @@ class TestJack: public JackCpp::AudioIO {
 						addInPort(buf);
 					}
 				}
+				// nb. left right naming
+				addInPort("special-0-1");
+				addInPort("special-0-2");
 		}
 		int curi = 0, curj = 0;
+		int special = -1;
 };
 
 int main(int argc, char *argv[])
@@ -94,6 +76,7 @@ int main(int argc, char *argv[])
 	int artarg = -1;
 	bool shuffle_mode = false;
 	char *title = "Dear ImGui jackd router";
+	static char info[1024*4];
 
 	while ((opt = getopt(argc, argv, "sa:St:")) != -1) {
 		switch (opt) {
@@ -112,52 +95,8 @@ int main(int argc, char *argv[])
 		}
 	}
 
-
-	glfwSetErrorCallback(glfw_error_callback);
-	if (!glfwInit())
-		return 1;
-
-	// Decide GL+GLSL versions
-#if defined(IMGUI_IMPL_OPENGL_ES2)
-	// GL ES 2.0 + GLSL 100
-	const char* glsl_version = "#version 100";
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
-#elif defined(__APPLE__)
-	// GL 3.2 + GLSL 150
-	const char* glsl_version = "#version 150";
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
-	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);			// Required on Mac
-#else
-	// GL 3.0 + GLSL 130
-	const char* glsl_version = "#version 130";
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
-	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);			// 3.0+ only
-#endif
-
-	window = glfwCreateWindow(sw, sh, title, NULL, NULL);
-	if (window == NULL)
-		return 1;
-	glfwMakeContextCurrent(window);
-	glfwSwapInterval(vsync);
-
-
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
-	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;	 // Enable Keyboard Controls
-	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;	  // Enable Gamepad Controls
-
-	ImGui::StyleColorsDark();
-	//ImGui::StyleColorsLight();
-
-	ImGui_ImplGlfw_InitForOpenGL(window, true);
-	ImGui_ImplOpenGL3_Init(glsl_version);
+	if (int ret = mygui(title, vsync))
+		return ret;
 
 	//init_shaders();
 
@@ -189,10 +128,10 @@ int main(int argc, char *argv[])
 		
 		ImGui::BeginGroup();
 		int rows = 8, columns = 8;
+		char buf[32];
 		for (int i=0; i<rows; i++) {
 			ImGui::BeginGroup();
 			for (int j=0; j<columns; j++) {
-				char buf[32];
 				sprintf(buf, "%dx%d", i, j);
 				bool light = tj.is_current_in(i,j);
 				if (light)
@@ -202,8 +141,25 @@ int main(int argc, char *argv[])
 				}
 				if (light)
 					ImGui::PopStyleColor(1);
+				ImGui::SameLine();
 			}
 			ImGui::EndGroup();
+		}
+		ImGui::EndGroup();
+		ImGui::BeginGroup();
+		for (int s = 0; s < 1; s++) {
+			sprintf(buf, "%d", s);
+			bool light = tj.is_special(s);
+			if (light)
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.3f, 0.8f, 0.4f, 1.0f});
+			if (ImGui::Button(buf, ImVec2(32,16))) {
+				if (!light)
+					tj.set_special(s);
+				else
+					tj.set_special(-1);
+			}
+			if (light)
+				ImGui::PopStyleColor(1);
 			ImGui::SameLine();
 		}
 		ImGui::EndGroup();
@@ -225,21 +181,14 @@ int main(int argc, char *argv[])
 			//resized(sw, sh);
 		}
 
-		//draw();
-
 		ImGui::Render();
 		glViewport(0, 0, sw, sh);
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 		glfwSwapBuffers(window);
+		++frame_number;
 	}
 
-	ImGui_ImplOpenGL3_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
-	ImGui::DestroyContext();
-
-	glfwDestroyWindow(window);
-	glfwTerminate();
-
+	endgui();
 	tj.close();
 	printf("exit\n");
 	return 0;
