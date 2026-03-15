@@ -5,67 +5,7 @@
 #include "myimgui.hpp"
 #include "imgui_elements.h"
 
-#include "jackaudioio.hpp"
-
-
-class TestJack: public JackCpp::AudioIO {
-	int m_in = 0;
-	const int i0, j0;
-	public:
-		virtual int audioCallback(jack_nframes_t nframes, 
-				audioBufVector inBufs, audioBufVector outBufs) {
-			for(unsigned int j = 0; j < nframes; j++) {
-				if (special != -1) {
-					int last = i0*j0*2;
-					outBufs[0][j] = inBufs[last+special+0][j];
-					outBufs[1][j] = inBufs[last+special+1][j];
-				}
-				else {
-					int cur = curi*i0 + curj;
-					outBufs[0][j] = inBufs[cur*2][j];
-					outBufs[1][j] = inBufs[cur*2+1][j];
-				}
-			}
-			return 0;
-		}
-		bool is_special(int s) {
-			return special == s;
-		}
-		void set_special(int s) {
-			special = s;
-		}
-		bool is_current_in(int i, int j) {
-			return curi == i && curj == j;
-		}
-		void set_current_in(int i, int j) {
-			curi = i;
-			curj = j;
-		}
-		TestJack(int i, int j) :
-			JackCpp::AudioIO("imjack-test", 0, 0),
-			i0(i), j0(j)
-			{
-				reserveInPorts(i0*j0*2+2);
-				reserveOutPorts(2);
-
-				addOutPort("out-1");
-				addOutPort("out-2");
-				for (int ii=0; ii<i0; ii++) {
-					for (int jj=0; jj<j0; jj++) {
-						char buf[32];
-						sprintf(buf, "in-%d-%d-l", ii, jj);
-						addInPort(buf);
-						sprintf(buf, "in-%d-%d-r", ii, jj);
-						addInPort(buf);
-					}
-				}
-				// nb. left right naming
-				addInPort("special-0-1");
-				addInPort("special-0-2");
-		}
-		int curi = 0, curj = 0;
-		int special = -1;
-};
+#include "testjack.hpp"
 
 int main(int argc, char *argv[])
 {

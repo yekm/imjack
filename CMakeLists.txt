@@ -55,8 +55,9 @@ add_library(jacks OBJECT
     myimgui.cpp
     imgui_elements.cpp
     timer.cpp
-    #testjack.cpp
+    testjack.cpp
     )
+set_property(TARGET jacks PROPERTY CXX_STANDARD 11)
 
 add_library(jackcpp STATIC
     jackcpp/src/jackaudioio.cpp
