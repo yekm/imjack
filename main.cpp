@@ -13,10 +13,13 @@ int main(int argc, char *argv[])
 
 	int opt;
 	int vsync = 1;
-	char *title = "Dear jackd router";
+	char *title = (char*)"Dear jackd router";
 	static char info[1024*4];
+	
+	const char* config_path = "config.conf";
+	const char* wav_prefix = "filter/filter-center1-soft";
 
-	while ((opt = getopt(argc, argv, "st:")) != -1) {
+	while ((opt = getopt(argc, argv, "st:c:a:")) != -1) {
 		switch (opt) {
 		case 's':
 			vsync = 0;
@@ -24,11 +27,14 @@ int main(int argc, char *argv[])
 		case 't':
 			title = optarg;
 			break;
-		default: /* '?' */
-			fprintf(stderr, "Usage: %s [-s] [-t title]\n\n"
-				"-s		   disable vsync\n"
-				"-t title	 set window title",
-					argv[0]);
+		case 'c':
+			config_path = optarg;
+			break;
+		case 'a':
+			wav_prefix = optarg;
+			break;
+		default:
+			fprintf(stderr, "Usage: %s [-s] [-t title] [-c config.conf] [-a prefix]\n\n", argv[0]);
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -44,7 +50,7 @@ int main(int argc, char *argv[])
 	ImVec4 clear_color = ImVec4(0, 0, 0, 1.00f);
 
 	get_window_size();
-	TestJack tj(8, 8);
+	TestJack tj(8, 8, config_path, wav_prefix);
 	tj.start();
 
 	while (!glfwWindowShouldClose(window))

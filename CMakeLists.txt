@@ -56,6 +56,12 @@ add_library(jacks OBJECT
     imgui_elements.cpp
     timer.cpp
     testjack.cpp
+    jconvolver_inc/config.cc
+    jconvolver_inc/dither.cc
+    jconvolver_inc/sstring.cc
+    jconvolver_inc/audiofile.cc
+    jconvolver_inc/imjack_glue.cc
+    zita_inc/zita-convolver.cc
     )
 set_property(TARGET jacks PROPERTY CXX_STANDARD 11)
 
@@ -76,13 +82,15 @@ set_property(TARGET jackcpp PROPERTY CXX_STANDARD 11)
 
 target_include_directories(jacks PRIVATE .)
 target_include_directories(jacks PRIVATE jackcpp/include)
+target_include_directories(jacks PRIVATE jconvolver_inc)
+target_include_directories(jacks PRIVATE zita_inc)
 
-target_link_libraries(jacks IMGUI glfw GL jackcpp)
+target_link_libraries(jacks IMGUI glfw GL jackcpp fftw3f sndfile)
 
 add_executable(imjack main.cpp)
 #add_executable(imjack main.cpp $<TARGET_OBJECTS:jacks>)
 target_link_libraries(imjack jacks jackcpp)
 set_property(TARGET imjack PROPERTY CXX_STANDARD 11)
 target_include_directories(imjack PRIVATE jackcpp/include)
-target_link_libraries(imjack IMGUI ${GLFW3_LIBRARY} ${OPENGL_LIBRARIES} jack)
+target_link_libraries(imjack IMGUI ${GLFW3_LIBRARY} ${OPENGL_LIBRARIES} jack fftw3f sndfile)
 set_target_properties(imjack PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})

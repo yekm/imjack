@@ -1,41 +1,63 @@
 #include "testjack.hpp"
 #include <cstdio>
+#include "imjack_glue.h"
 
-TestJack::TestJack(int i, int j) :
+TestJack::TestJack(int i, int j, const char* cfg, const char* wav) :
     JackCpp::AudioIO("imjack-test", 0, 0),
-    i0(i), j0(j)
+    i0(i), j0(j), config_path(cfg), wav_prefix(wav)
 {
-    reserveInPorts(i0*j0*2+2);
+    // Need 2 normal inputs (L/R) + 2 special inputs
+    reserveInPorts(4);
     reserveOutPorts(2);
 
-    addOutPort("out-1");
-    addOutPort("out-2");
+    addOutPort("out-l");
+    addOutPort("out-r");
+    
+    addInPort("in-l");
+    addInPort("in-r");
+    
+    addInPort("special-l");
+    addInPort("special-r");
+    
+    convolvers.resize(i0 * j0, nullptr);
     for (int ii=0; ii<i0; ii++) {
         for (int jj=0; jj<j0; jj++) {
-            char buf[32];
-            sprintf(buf, "in-%d-%d-l", ii, jj);
-            addInPort(buf);
-            sprintf(buf, "in-%d-%d-r", ii, jj);
-            addInPort(buf);
+            convolvers[ii*j0 + jj] = JconvolverGlue::create_instance(config_path.c_str(), wav_prefix.c_str(), ii, jj);
         }
     }
-    // nb. left right naming
-    addInPort("special-0-1");
-    addInPort("special-0-2");
+    
+    if (!convolvers.empty()) {
+        current_convolver = convolvers[0];
+    }
+}
+
+TestJack::~TestJack() {
+    for (auto c : convolvers) {
+        JconvolverGlue::destroy_instance(c);
+    }
 }
 
 int TestJack::audioCallback(jack_nframes_t nframes,
         audioBufVector inBufs, audioBufVector outBufs) {
-    for(unsigned int j = 0; j < nframes; j++) {
-        if (special != -1) {
-            int last = i0*j0*2;
-            outBufs[0][j] = inBufs[last+special+0][j];
-            outBufs[1][j] = inBufs[last+special+1][j];
+    if (special != -1) {
+        // Special mode routing
+        for(unsigned int j = 0; j < nframes; j++) {
+            outBufs[0][j] = inBufs[2][j];
+            outBufs[1][j] = inBufs[3][j];
         }
-        else {
-            int cur = curi*i0 + curj;
-            outBufs[0][j] = inBufs[cur*2][j];
-            outBufs[1][j] = inBufs[cur*2+1][j];
+    }
+    else {
+        // Convolver routing
+        if (current_convolver) {
+            const float* in[2] = { inBufs[0], inBufs[1] };
+            float* out[2] = { outBufs[0], outBufs[1] };
+            JconvolverGlue::process(current_convolver, nframes, in, out);
+        } else {
+            // Bypass if no convolver
+            for(unsigned int j = 0; j < nframes; j++) {
+                outBufs[0][j] = inBufs[0][j];
+                outBufs[1][j] = inBufs[1][j];
+            }
         }
     }
     return 0;
@@ -56,4 +78,7 @@ bool TestJack::is_current_in(int i, int j) {
 void TestJack::set_current_in(int i, int j) {
     curi = i;
     curj = j;
+    if (i >= 0 && i < i0 && j >= 0 && j < j0) {
+        current_convolver = convolvers[i * j0 + j];
+    }
 }
