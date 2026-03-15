@@ -1,0 +1,29 @@
+Release notes for jconvolver and fconvolver 1.0
+-----------------------------------------------
+
+Jconvolver is Jack client performing real-time
+convolution. It supports up to a 64 by 64 matrix
+(i.e. 4096 simultaneous convolutions) as long as
+your CPU(s) can handle the load.
+
+Jconvolver is designed to be efficient also for
+sparse (e.g. diagonal) matrices, and for sparse
+impulse responses. Unused matrix elements and
+unused partitions do not take any CPU time.
+
+In contrast to e.g. BruteFir, jconvolver uses
+multiple partition sizes, small ones at the start
+of the impulse response and progressively longer
+ones for the rest. This allows it provide both
+zero processing delay while still remaining 
+efficient in CPU use. The exact sequence of
+partition sizes used depends in a complex way
+on some elements of the configuration.
+
+Fconvolver performs the same processing on files
+instead of real-time. The same configuration file
+as for jconvolver can be used, any elements that
+are not required will be ignored.
+
+-- 
+FA
