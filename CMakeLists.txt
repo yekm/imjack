@@ -56,10 +56,8 @@ add_library(jacks OBJECT
     imgui_elements.cpp
     timer.cpp
     testjack.cpp
-    jconvolver_inc/config.cc
-    jconvolver_inc/dither.cc
-    jconvolver_inc/sstring.cc
     jconvolver_inc/audiofile.cc
+    jconvolver_inc/dither.cc
     jconvolver_inc/imjack_glue.cc
     zita_inc/zita-convolver.cc
     )

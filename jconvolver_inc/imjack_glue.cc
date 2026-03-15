@@ -1,82 +1,10 @@
 #include "imjack_glue.h"
-#include "config.h"
 #include "zita-convolver.h"
+#include "audiofile.h"
 #include <stdio.h>
 #include <string.h>
 
-// Globals defined in config.cc
-extern const char* g_wav_path_prefix;
-extern int g_row;
-extern int g_col;
-
-// Globals needed by config.cc
-Convproc *convproc = 0;
-char jackname [NAMELEN] = "imjack";
-char jackserv [NAMELEN] = "";
-unsigned int latency = 0;
-unsigned int options = 0;
-unsigned int fsamp = 48000;
-unsigned int fragm = 1024;
-unsigned int ninp = 0;
-unsigned int nout = 0;
-unsigned int size = 0;
-
-// Dummy Jclient for config parser
-class Jclient {
-public:
-    Jclient(const char*, const char*, Convproc*) {}
-    unsigned int fsamp() const { return ::fsamp; }
-    unsigned int fragm() const { return ::fragm; }
-    void add_input_port(const char*, const char* = 0) {}
-    void add_output_port(const char*, const char* = 0) {}
-};
-Jclient *jclient = 0;
-
-// Need to implement convnew which config.cc calls when it hits /convolver/new
-// We intercept this to setup Convproc but avoid jclient start
-static char *inp_name [Convproc::MAXINP];
-static char *out_name [Convproc::MAXOUT];
-static char *inp_conn [Convproc::MAXINP];
-static char *out_conn [Convproc::MAXOUT];
-
-int convnew (const char *line, int lnum)
-{
-    unsigned int part;
-    float        dens;
-    int          r;
-
-    convproc = new Convproc;
-    jclient = new Jclient (jackname, jackserv, convproc);
-    fsamp = jclient->fsamp ();
-    fragm = jclient->fragm ();
-
-    memset (inp_name, 0, Convproc::MAXINP * sizeof (char *));
-    memset (inp_conn, 0, Convproc::MAXINP * sizeof (char *));
-    memset (out_name, 0, Convproc::MAXOUT * sizeof (char *));
-    memset (out_conn, 0, Convproc::MAXOUT * sizeof (char *));
-
-    r = sscanf (line, "%u %u %u %u %f", &ninp, &nout, &part, &size, &dens);
-    if (r < 4) return ERR_PARAM;
-    if (r < 5) dens = 0;
-
-    if ((ninp == 0) || (ninp > Convproc::MAXINP)) return ERR_OTHER;
-    if ((nout == 0) || (nout > Convproc::MAXOUT)) return ERR_OTHER;
-    if  ((part & (part -1)) || (part < Convproc::MINPART) || (part > Convproc::MAXPART)) return ERR_OTHER;
-    
-    if (part > Convproc::MAXDIVIS * fragm) part = Convproc::MAXDIVIS * fragm; 
-    if (part < fragm) part = fragm; 
-    if (size > MAXSIZE) return ERR_OTHER;
-    if ((dens < 0.0f) || (dens > 1.0f)) return ERR_OTHER;
-
-    convproc->set_options (options);
-    if (convproc->configure (ninp, nout, size, fragm, part, Convproc::MAXPART, dens)) return ERR_OTHER;
-
-    return 0;
-}
-
-int inpname (const char *line) { return 0; }
-int outname (const char *line) { return 0; }
-void makeports (void) {}
+#define BSIZE  0x4000
 
 struct JconvolverInstance {
     Convproc* conv;
@@ -85,33 +13,102 @@ struct JconvolverInstance {
 };
 
 JconvolverInstance* JconvolverGlue::create_instance(const char* config_path, const char* wav_path_prefix, int row, int col) {
-    g_wav_path_prefix = wav_path_prefix;
-    g_row = row;
-    g_col = col;
+    // We are no longer using config parser.
+    // Instead we configure Convproc manually as requested:
+    // /convolver/new 2 2 1024 65536
+    // /input/name 1 in-l
+    // /input/name 2 in-r
+    // /output/name 1 out-l
+    // /output/name 2 out-r
+    // /impulse/read 1 1 1 0 0 0 1 filter/filter-center1-soft-0-0-l.wav
+    // /impulse/read 2 2 1 0 0 0 1 filter/filter-center1-soft-0-0-r.wav
+
+    unsigned int ninp = 2;
+    unsigned int nout = 2;
+    unsigned int part = 1024; // fragment size
+    unsigned int size = 65536; // max convolution length
+    float dens = 0.0f;
+    unsigned int fragm = 1024;
+    // fsamp is not actively passed to configure, zita handles rate via data size
     
-    // Set some defaults just in case
-    convproc = nullptr;
-    fsamp = 48000;
-    fragm = 1024;
-    
-    if (config(config_path)) {
-        fprintf(stderr, "Failed to load config %s\n", config_path);
-        if (convproc) {
-            delete convproc;
-            convproc = nullptr;
-        }
+    Convproc* conv = new Convproc;
+    if (conv->configure(ninp, nout, size, fragm, part, Convproc::MAXPART, dens)) {
+        fprintf(stderr, "Failed to configure convolver %d:%d\n", row, col);
+        delete conv;
         return nullptr;
     }
-    
-    if (!convproc) return nullptr;
-    
+
+    // Helper lambda to load and assign wav file to convolver instance
+    auto load_wav = [&](int ip1, int op1, const char* suffix) -> bool {
+        char path[1024];
+        snprintf(path, sizeof(path), "%s-%d-%d-%s", wav_path_prefix, row, col, suffix);
+
+        Audiofile audio;
+        if (audio.open_read(path)) {
+            fprintf(stderr, "Unable to open '%s'\n", path);
+            return false;
+        }
+
+        int nchan = audio.chan();
+        int nfram = audio.size();
+        
+        int ichan = 1; // Always take first channel of the file (from original config: read X X X X X X 1 ...)
+        if (nchan < 1) {
+            audio.close();
+            return false;
+        }
+
+        float gain = 1.0f;
+        unsigned int delay = 0;
+        unsigned int length = nfram;
+        if (length > size) length = size;
+
+        float* buff;
+        try {
+            buff = new float[BSIZE * nchan];
+        } catch (...) {
+            audio.close();
+            return false;
+        }
+
+        while (length > 0) {
+            int to_read = (length > BSIZE) ? BSIZE : length;
+            int read_frames = audio.read(buff, to_read);
+            if (read_frames <= 0) break; // EOF or Error
+
+            float* p = buff + (ichan - 1);
+            for (int i = 0; i < read_frames; i++) {
+                p[i * nchan] *= gain;
+            }
+
+            if (conv->impdata_create(ip1 - 1, op1 - 1, nchan, p, delay, delay + read_frames)) {
+                audio.close();
+                delete[] buff;
+                return false;
+            }
+            delay += read_frames;
+            length -= read_frames;
+        }
+        
+        audio.close();
+        delete[] buff;
+        return true;
+    };
+
+    bool success_l = load_wav(1, 1, "l.wav");
+    bool success_r = load_wav(2, 2, "r.wav");
+
+    if (!success_l || !success_r) {
+        fprintf(stderr, "Warning: failed to load one or more wav files for %d:%d\n", row, col);
+    }
+
     JconvolverInstance* instance = new JconvolverInstance;
-    instance->conv = convproc;
+    instance->conv = conv;
     instance->ninp = ninp;
     instance->nout = nout;
     
-    // We don't start it immediately, TestJack might need to handle threading/priority
-    instance->conv->start_process(0, 0); // Need to check how jack cpp manages thread prio
+    // Check if we need to call configure/start_process here
+    instance->conv->start_process(0, 0);
     
     return instance;
 }
