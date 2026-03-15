@@ -73,12 +73,10 @@ int main(int argc, char *argv[])
 
 	int opt;
 	int vsync = 1;
-	int artarg = -1;
-	bool shuffle_mode = false;
 	char *title = "Dear jackd router";
 	static char info[1024*4];
 
-	while ((opt = getopt(argc, argv, "sa:St:")) != -1) {
+	while ((opt = getopt(argc, argv, "st:")) != -1) {
 		switch (opt) {
 		case 's':
 			vsync = 0;
@@ -87,7 +85,7 @@ int main(int argc, char *argv[])
 			title = optarg;
 			break;
 		default: /* '?' */
-			fprintf(stderr, "Usage: %s [-s] [-a art_number] [-S]\n\n"
+			fprintf(stderr, "Usage: %s [-s] [-t title]\n\n"
 				"-s		   disable vsync\n"
 				"-t title	 set window title",
 					argv[0]);
