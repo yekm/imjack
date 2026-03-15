@@ -41,7 +41,7 @@ class TestJack: public JackCpp::AudioIO {
 			curi = i;
 			curj = j;
 		}
-		TestJack(int i, int j) :i
+		TestJack(int i, int j) :
 			JackCpp::AudioIO("imjack-test", 0, 0),
 			i0(i), j0(j)
 			{
