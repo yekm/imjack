@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
 	int vsync = 1;
 	int artarg = -1;
 	bool shuffle_mode = false;
-	char *title = "Dear ImGui jackd router";
+	char *title = "Dear jackd router";
 	static char info[1024*4];
 
 	while ((opt = getopt(argc, argv, "sa:St:")) != -1) {
