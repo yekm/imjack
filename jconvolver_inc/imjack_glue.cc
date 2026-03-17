@@ -92,6 +92,7 @@ JconvolverInstance* JconvolverGlue::create_instance(const char* config_path, con
         
         audio.close();
         delete[] buff;
+        printf("Loaded WAV: %s\n", path);
         return true;
     };
 
