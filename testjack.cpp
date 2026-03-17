@@ -3,21 +3,21 @@
 #include "imjack_glue.h"
 
 TestJack::TestJack(int i, int j, const char* cfg, const char* wav) :
-    JackCpp::AudioIO("imjack-test", 0, 0),
+    JackCpp::AudioIO("imjack-jc", 0, 0),
     i0(i), j0(j), config_path(cfg), wav_prefix(wav)
 {
     // Need 2 normal inputs (L/R) + 2 special inputs
     reserveInPorts(4);
     reserveOutPorts(2);
 
-    addOutPort("out-l");
-    addOutPort("out-r");
+    addOutPort("out-1");
+    addOutPort("out-2");
     
-    addInPort("in-l");
-    addInPort("in-r");
+    addInPort("in-1");
+    addInPort("in-2");
     
-    addInPort("special-l");
-    addInPort("special-r");
+    addInPort("special-1");
+    addInPort("special-2");
     
     convolvers.resize(i0 * j0, nullptr);
     for (int ii=0; ii<i0; ii++) {
