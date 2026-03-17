@@ -2,9 +2,9 @@
 #include <cstdio>
 #include "imjack_glue.h"
 
-TestJack::TestJack(int i, int j, const char* cfg, const char* wav) :
+TestJack::TestJack(int i, int j, const char* wav) :
     JackCpp::AudioIO("imjack-jc", 0, 0),
-    i0(i), j0(j), config_path(cfg), wav_prefix(wav)
+    i0(i), j0(j), wav_prefix(wav)
 {
     // Need 2 normal inputs (L/R) + 2 special inputs
     reserveInPorts(4);
@@ -22,7 +22,7 @@ TestJack::TestJack(int i, int j, const char* cfg, const char* wav) :
     convolvers.resize(i0 * j0, nullptr);
     for (int ii=0; ii<i0; ii++) {
         for (int jj=0; jj<j0; jj++) {
-            convolvers[ii*j0 + jj] = JconvolverGlue::create_instance(config_path.c_str(), wav_prefix.c_str(), ii, jj);
+            convolvers[ii*j0 + jj] = JconvolverGlue::create_instance(wav_prefix.c_str(), ii, jj);
         }
     }
     

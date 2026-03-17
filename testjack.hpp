@@ -10,14 +10,13 @@ class TestJack : public JackCpp::AudioIO {
     const int i0, j0;
     
     // Config properties
-    std::string config_path;
     std::string wav_prefix;
 
     std::vector<JconvolverInstance*> convolvers;
     JconvolverInstance* current_convolver = nullptr;
 
 public:
-    TestJack(int i, int j, const char* cfg, const char* wav);
+    TestJack(int i, int j, const char* wav);
     ~TestJack();
 
     virtual int audioCallback(jack_nframes_t nframes,

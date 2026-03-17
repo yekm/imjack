@@ -12,7 +12,7 @@ struct JconvolverInstance {
     int nout;
 };
 
-JconvolverInstance* JconvolverGlue::create_instance(const char* config_path, const char* wav_path_prefix, int row, int col) {
+JconvolverInstance* JconvolverGlue::create_instance(const char* wav_path_prefix, int row, int col) {
     // We are no longer using config parser.
     // Instead we configure Convproc manually as requested:
     // /convolver/new 2 2 1024 65536
