@@ -1,5 +1,6 @@
 
 set -e
+mkdir -p logs filter || true
 export rec=$1
 export trec=/tmp/$rec
 #export parallel='parallel --tag -k -j1 --halt now,fail=1'
@@ -39,7 +40,8 @@ export len=8
 export len1=7
 # convolve FOR $1 base .drc
 conv4() {
-	drc=soft
+	#drc=soft
+	drc=normal
 	# MPLowerWindow 16384 ... 65536
 	# MPUpperWindow 22 ... 128 
 	i=$1
@@ -53,16 +55,6 @@ conv4() {
 	ch2=$(( $n * 2 + 2 ))
 	#ch="out-$i-$j"
 	
-#/input/name      $ch1    $d-in-$s-1
-#/input/name      $ch2    $d-in-$s-2
-	d=win
-	cat << EOF
-/output/name     $ch1    out-$n-l
-/output/name     $ch2    out-$n-r
-/impulse/read    1   $ch1    1      0      0       0    1     $fo-l.wav
-/impulse/read    2   $ch2    1      0      0       0    1     $fo-r.wav
-EOF
-
     # min + (step_len) * n
      w=$(bc -l <<< "0.6 +   $i * (1.5   - 0.6)   / $len")
     lw=$(bc -l <<< "16384 + $j * (65536 - 16384) / $len" | cut -f1 -d.)
@@ -70,48 +62,25 @@ EOF
 
 	drc_args="$drc_args --MPWindowExponent=$w --EPWindowExponent=$w"
 	#drc_args="$drc_args --MPLowerWindow=$lw --MPUpperWindow=$w"
-	drc_args="$drc_args --MPLowerWindow=$lw"
+	#drc_args="$drc_args --MPLowerWindow=$lw"
 	
-	echo "$i $j $n $ch1 $ch2 $w $lw $uw" >> /tmp/drc.log
+	echo "$i $j $n $ch1 $ch2 $w $lw $uw" >> logs/drc.log
 
 	#[ -s $fo-l.wav ] && exit
 	#SKIP=1
 	[ -n "$SKIP" ] && [ -s $fo-l.wav ] && exit
 	o=$i-$j
-	$parallel "./drc --BCInFile=$trec-{}.pcm --PSOutFile=$trec-filter-$o-{}.pcm --PSPointsFile='drc-3.2.3/source/target/48.0 kHz/'$target $drc_args 'drc-3.2.3/source/config/48.0 kHz/'$drc-48.0.drc" ::: l r |& tee $trec-$o-drc.log |& pv -Xq
+	$parallel "./drc --BCInFile=$trec-{}.pcm --PSOutFile=$trec-filter-$o-{}.pcm --PSPointsFile='drc-3.2.3/source/target/48.0 kHz/'$target $drc_args 'drc-3.2.3/source/config/48.0 kHz/'$drc-48.0.drc" ::: l r |& tee logs/$trec-$o-drc.log |& pv -Xq
 	
 	$parallel "sox -t f32 -r 48000 -c1 $trec-filter-$o-{}.pcm $fo-{}.wav" ::: l r |& pv -Xq
 	sox $fo-?.wav --combine merge lsp/$fo-stereo.wav |& pv -Xq
 }
-convw() {
-	jcc=$jc-$1.conf
-	echo $jcc >>jc.conf.list
-	cat > $jcc << EOF
-#                        in  out   partition    maxsize
-# ---------------------------------------------------------------
-/convolver/new    2    $(( $len * 2))        1024        65536
-#
-/input/name      1    in-1
-/input/name      2    in-2
-#
-#               in out  gain  delay  offset  length  chan      file
-# --------------------------------------------------------------------------
-EOF
-
-    parallel -k conv4 $1 ::: $(seq 0 $len1) | tee -a $jcc
+c() {
+	parallel -k conv4 $1 ::: $(seq 0 $len1)
 }
-export -f convw conv4
+export -f c conv4
 
-export jc=jc-$rec
-
-rm -f jc.conf.list
-parallel -j2 -k convw ::: $(seq 0 $len1)
-#exit
-
-echo ok?
-read qwe
-ln -vsf $jc jc-service.conf
-killall jconvolver || true
+parallel -j2 -k c ::: $(seq 0 $len1)
 
 exit
 

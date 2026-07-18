@@ -1,8 +1,16 @@
 b
 build
 
+drc.sh/filter
+*.wav
+*.WAV
+*.pcm
+*.log
+log.txt
+glsweep
 
-
+compile_comm*.json
+session-*.md
 
 
 # Prerequisites
